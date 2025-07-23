@@ -1,0 +1,25 @@
+# Requerimientos base para el proyecto
+
+# ETL y manipulación de datos
+pandas
+numpy
+requests
+time
+datetime
+
+# Machine Learning
+scikit-learn
+
+# Visualización y dashboards
+matplotlib
+seaborn
+plotly
+streamlit
+
+# Backend/API
+fastapi
+uvicorn
+json
+
+# Otros
+tqdm
