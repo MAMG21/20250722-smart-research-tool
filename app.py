@@ -1,226 +1,179 @@
-import streamlit as st
+# Librerias principales
+import hydralit_components as hc
+import platform
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import pydeck as pdk
-import networkx as nx
-import plotly.express as px
+import requests
+import streamlit as st
 
-# --- CONFIGURACIÓN GENERAL ---
+# import streamlit_analytics
+from streamlit_modal import Modal
+import streamlit_lottie
+import time
+import json
+
+# Funciones dentro de carpetas
+# Visuales
+from navigation.introduction import home_page
+from navigation.analisis import allapp_page
+from navigation.referencias import resource_page
+from navigation.contacto import contact_page
+from utils.components import footer_style, footer
+
+# Analiticias
+from core.consulta_autores import get_author_id
+from core.consulta_autores import get_concept_id, get_top_authors_by_concept
+from core.consulta_publicaciones import fetch_author_works
+from core.metricas import compute_bibliometric_indices
+
+try:
+    from streamlit import rerun as rerun
+except ImportError:
+    # conditional import for streamlit version <1.27
+    from streamlit import experimental_rerun as rerun
+
+import os
+
+
+def load_lottiefile(filepath: str):
+    with open(filepath, "r") as f:
+        return json.load(f)
+
+
 st.set_page_config(
-    page_title="OpenAlex Analytics - Demo",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    page_title='Analisis Bibliometrico',
+    page_icon="img/analisis.png",
+    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
-# --- ESTILOS GLOBALES ---
+if 'lottie' not in st.session_state:
+    st.session_state.lottie = False
+
+
+max_width_str = f"max-width: {75}%;"
+
+st.markdown(f"""
+        <style>
+        .appview-container .main .block-container{{{max_width_str}}}
+        </style>
+        """,
+            unsafe_allow_html=True,
+            )
+
 st.markdown("""
-    <style>
-        html, body, [class*="css"]  {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: #EBECF1;
-        }
-        .main-title {
-            text-align: center;
-            font-size: 40px;
-            font-weight: bold;
-            color: #0771B6;
-            margin-bottom: 5px;
-        }
-        .subtitle {
-            text-align: center;
-            font-size: 22px;
-            font-weight: 500;
-            color: #46566F;
-            margin-bottom: 30px;
-        }
-        .section-title {
-            font-size: 20px;
-            font-weight: bold;
-            color: black;
-            margin-top: 25px;
-            margin-bottom: 10px;
-        }
-        .footer {
-            margin-top: 50px;
-            text-align: center;
-            font-size: 14px;
-            color: black;
-            font-weight: 500;
-        }
-        .profile-metrics-row {
-            display: flex;
-            flex-direction: row;
-            align-items: flex-start;
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-        .author-box {
-            width: 300px;
-            background-color: #f9f9f9;
-            padding: 15px;
-            border-radius: 10px;
-            text-align: center;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-        }
-        .author-box img {
-            border-radius: 50%;
-            width: 120px;
-            height: 120px;
-            object-fit: cover;
-            margin-bottom: 15px;
-        }
-        .author-name {
-            font-weight: bold;
-            font-size: 18px;
-            margin-bottom: 8px;
-        }
-        .author-affiliation {
-            font-size: 14px;
-            color: #46566F;
-        }
-        .metrics-box {
-            flex: 1;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            align-items: flex-start;
-        }
-        .metric-card {
-            background-color: #f9f9f9;
-            border-radius: 10px;
-            padding: 10px 16px;
-            text-align: center;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-            flex: 1 1 160px;
-            min-width: 160px;
-            max-width: 200px;
-        }
-        .metric-card h4 {
-            margin: 0;
-            font-size: 16px;
-        }
-        .metric-card p {
-            font-size: 20px;
-            font-weight: bold;
-            margin: 5px 0 0 0;
-        }
-    </style>
-""", unsafe_allow_html=True)
+        <style>
+               .block-container {
+                    padding-top: 0rem;
+                    padding-bottom: 0rem;
 
-# --- TÍTULO Y SUBTÍTULO ---
-st.markdown(
-    """
-    <div class="main-title">Evaluación de la producción científica de investigadores con métricas y altmétricas a partir de bases de datos bibliográficas dinámicas</div>
-    <div class="subtitle">Maestría en Estadística Aplicada a Ciencia de Datos</div>
-    """,
-    unsafe_allow_html=True
-)
+                }
+        </style>
+        """, unsafe_allow_html=True)
 
-# --- PERFIL DEL AUTOR + MÉTRICAS ---
-st.markdown("""
-<div class="profile-metrics-row">
-    <div class="author-box">
-        <img src="https://randomuser.me/api/portraits/men/75.jpg" alt="Foto autor">
-        <div class="author-name">Nombre Autor</div>
-        <div class="author-affiliation">Afiliación Autor</div>
-    </div>
-    <div class="metrics-box">
-        <div class="metric-card"><h4>📄 Total Artículos</h4><p>100</p></div>
-        <div class="metric-card"><h4>🧾 Total Citas</h4><p>2,000</p></div>
-        <div class="metric-card"><h4>📗 H-index</h4><p>120</p></div>
-        <div class="metric-card"><h4>📘 G-index</h4><p>150</p></div>
-        <div class="metric-card"><h4>📙 E-index</h4><p>80</p></div>
-        <div class="metric-card"><h4>📕 M-index</h4><p>10</p></div>
-        <div class="metric-card"><h4>📒 B-index</h4><p>5</p></div>
-        <div class="metric-card"><h4>📓 V-index</h4><p>20</p></div>
-        <div class="metric-card"><h4>🔟 i10-index</h4><p>15</p></div>
-        <div class="metric-card"><h4>🧮 K-index</h4><p>11</p></div>
-        <div class="metric-card"><h4>📏 H Fraccional</h4><p>12</p></div>
-        <div class="metric-card"><h4>🏅 Autorank</h4><p>200</p></div>
-        <div class="metric-card"><h4>📊 H Relativo</h4><p>100</p></div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# Footer
 
-# --- PERFIL DEL INVESTIGADOR ---
-st.markdown('<div class="section-title">👤 Perfil del Investigador</div>', unsafe_allow_html=True)
+st.markdown(footer_style, unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
+# NavBar
 
-with col1:
-    st.markdown("🌍 Mapa de publicaciones")
-    # Datos ficticios de publicaciones por país
-    df_map = pd.DataFrame({
-    "country": ["USA", "FRA", "JPN", "COL", "BRA"],  # ISO-3 codes
-    "publications": [100, 50, 70, 30, 40]
-    })
+HOME = 'Introducción'
+APPLICATION = 'Análisis'
+RESOURCE = 'Referencias'
+CONTACT = 'Contacto'
 
-    fig_map = px.choropleth(
-        df_map,
-        locations="country",
-        color="publications",
-        hover_name="country",
-        color_continuous_scale="Blues",
-        projection="natural earth"
-    )
+tabs = [
+    HOME,
+    APPLICATION,
+    RESOURCE,
+    CONTACT,
+]
 
-    st.plotly_chart(fig_map, use_container_width=True)
+option_data = [
+    {'icon': "🗂", 'label': HOME},
+    {'icon': "✍", 'label': APPLICATION},
+    {'icon': "📑", 'label': RESOURCE},
+    {'icon': "✉️", 'label': CONTACT},
+]
 
-with col2:
-    st.markdown("🤝 Colaboraciones entre autores")
-    G = nx.Graph()
-    G.add_edges_from([
-        ("Yann LeCun", "Geoffrey Hinton"),
-        ("Yann LeCun", "Yoshua Bengio"),
-        ("Yann LeCun", "Jürgen Schmidhuber")
-    ])
+over_theme = {'txc_inactive': 'black', 'menu_background': '#D6E5FA', 'txc_active': 'white', 'option_active': '#749BC2'}
+font_fmt = {'font-class': 'h3', 'font-size': '50%'}
 
-    fig, ax = plt.subplots(figsize=(4, 2))
-    pos = nx.spring_layout(G, seed=20)
-    nx.draw(G, pos, with_labels=True, node_size=200, node_color="lightblue", font_size=5, ax=ax)
-    st.pyplot(fig)
+chosen_tab = hc.option_bar(
+    option_definition=option_data,
+    title='',
+    key='PrimaryOptionx',
+    override_theme=over_theme,
+    horizontal_orientation=True)
 
-# --- GRÁFICAS EN UNA SOLA FILA ---
-st.markdown('<div class="section-title">📈 Evolución de Publicaciones y Citas</div>', unsafe_allow_html=True)
+st.success("Bienvenido a la herramienta de análisis del impacto científico de investigadores en física y astronomía. Aquí podrás explorar métricas bibliométricas y altmétricas integradas, visualizar resultados de forma interactiva y conocer el nivel de relevancia de los investigadores.")
 
-years = np.arange(2000, 2021)
-pubs = np.random.randint(5, 30, size=len(years)).cumsum()
-cites = np.random.randint(100, 1000, size=len(years)).cumsum()
-freq_cites = np.random.randint(0, 200, size=len(years))
-pubs_yearly = np.random.randint(1, 30, size=len(years))
+if chosen_tab == HOME:
+    home_page()
 
-col1, col2, col3, col4 = st.columns(4)
+elif chosen_tab == APPLICATION:
+    allapp_page()
 
-with col1:
-    fig1, ax1 = plt.subplots()
-    ax1.plot(years, pubs, marker="o")
-    ax1.set_title("Artículos acumulados")
-    st.pyplot(fig1)
+elif chosen_tab == RESOURCE:
+    resource_page()
 
-with col2:
-    fig2, ax2 = plt.subplots()
-    ax2.plot(years, cites, marker="o", color="red")
-    ax2.set_title("Citas acumuladas")
-    st.pyplot(fig2)
+elif chosen_tab == CONTACT:
+    contact_page()
 
-with col3:
-    fig3, ax3 = plt.subplots()
-    ax3.bar(years, freq_cites)
-    ax3.set_title("Frecuencia de citas")
-    st.pyplot(fig3)
+for i in range(4):
+    st.markdown('#')
+st.markdown(footer, unsafe_allow_html=True)
 
-with col4:
-    fig4, ax4 = plt.subplots()
-    ax4.bar(years, pubs_yearly, color="green")
-    ax4.set_title("Publicaciones por año")
-    st.pyplot(fig4)
+# Credit
+st.logo("img/analisis.png")
 
-# --- FOOTER ---
-st.markdown("""
-    <div class="footer">
-        Universidad El Bosque - Facultad de Ciencias <br>
-        Autores: Nelson Maya y Maria Alejandra Marin
-    </div>
-""", unsafe_allow_html=True)
+# Help
+def mostrar_sidebar():
+    st.sidebar.image("img/cientifico.png")
+    st.sidebar.title("Análisis Bibliométrico")
+    author_name = st.sidebar.text_input("Nombre del autor", value="Yann LeCun")
 
+    if st.sidebar.button("Analizar Autor"):
+        with st.sidebar:
+            try:
+                with st.spinner("Descargando publicaciones..."):
+                    author_id, display_name = get_author_id(author_name, "")
+                    df = fetch_author_works(author_id, "")
+
+                    if df.empty:
+                        st.sidebar.warning("⚠️ No se encontraron publicaciones para este autor.")
+                        st.session_state.clear()  # O elimina las claves necesarias
+                    else:
+                        indices = compute_bibliometric_indices(df)
+                        indices["Autor"] = display_name
+                        st.session_state.df_metricas = indices
+                        st.session_state.df_trabajos = df
+
+                        total_publicaciones_fmt = "{:,.0f}".format(indices["Total Artículos"]).replace(",", ".")
+                        total_citas_fmt = "{:,.0f}".format(indices["Total Citas"]).replace(",", ".")
+
+                        st.session_state.total_public = total_publicaciones_fmt
+
+                        st.markdown('')
+
+                        st.sidebar.markdown(f"""
+                        <div style="background-color: #d4edda; padding: 10px; border-radius: 5px;">
+                        <b>✅ Autor encontrado:</b> {display_name}<br>
+                        <b>Total Publicaciones:</b> {total_publicaciones_fmt}<br>
+                        <b>Total Citas:</b> {total_citas_fmt}
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        st.markdown('')
+
+                        csv = df.to_csv(index=False).encode('utf-8')
+                        st.sidebar.download_button("Descargar publicaciones", csv, file_name=f"{author_id}_publicaciones.csv", mime="text/csv")
+
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+
+    # Guardar el author_name para que esté disponible
+    st.session_state.author_name = author_name
+
+    return author_name  # opcional
+    
+mostrar_sidebar()
