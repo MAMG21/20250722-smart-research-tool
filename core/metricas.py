@@ -1,32 +1,77 @@
-
 import pandas as pd
 import numpy as np
 import datetime
+import streamlit as st
 
 def compute_bibliometric_indices(df, comparables=None):
-    df['citations'] = pd.to_numeric(df['citations'], errors='coerce').fillna(0)
-    df['year'] = pd.to_numeric(df['year'], errors='coerce')
-    citations = sorted(df['citations'], reverse=True)
-    total_citations = sum(citations)
+    """
+    Calcula varios índices bibliométricos (h, g, e, m, b, v, i10, k, h fraccional, etc.)
+    Compatible con el DataFrame devuelto por fetch_author_works().
+    """
+    st.session_state.df_master = df
 
+    # --- Verificación básica ---
+    if df is None or len(df) == 0:
+        print("⚠️ DataFrame vacío o no válido.")
+        return {}
+
+    df = df.copy()
+
+    # --- Detección automática de columnas ---
+    # Buscamos la columna de citas
+    if "citations" in df.columns:
+        citation_col = "citations"
+    elif "cited_by_count" in df.columns:
+        citation_col = "cited_by_count"
+    else:
+        df["citations"] = 0
+        citation_col = "citations"
+
+    # Buscamos la columna de año
+    if "year" in df.columns:
+        year_col = "year"
+    elif "publication_year" in df.columns:
+        year_col = "publication_year"
+    else:
+        df["year"] = np.nan
+        year_col = "year"
+
+    # --- Normalización de tipos ---
+    df[citation_col] = pd.to_numeric(df[citation_col], errors="coerce").fillna(0).astype(int)
+    df[year_col] = pd.to_numeric(df[year_col], errors="coerce")
+    if "authors" not in df.columns:
+        df["authors"] = ""
+
+    citations = sorted(df[citation_col], reverse=True)
+    total_citations = int(sum(citations))
+
+    # --- Cálculo de índices ---
     # H-index
-    h = sum(1 for i, c in enumerate(citations) if c >= i + 1)
+    h = 0
+    for i, c in enumerate(citations):
+        if c >= i + 1:
+            h = i + 1
+        else:
+            break
 
     # G-index
     g, cum = 0, 0
     for i, c in enumerate(citations):
         cum += c
-        if cum >= (i + 1)**2:
+        if cum >= (i + 1) ** 2:
             g = i + 1
-        else:
-            break
 
     # E-index
-    e = np.sqrt(sum(c - h for c in citations[:h])) if h > 0 else 0.0
+    e = np.sqrt(sum((c - h) for c in citations[:h] if c > h)) if h > 0 else 0.0
 
     # M-index
-    years = df['year'].dropna()
-    m = h / max(1, datetime.datetime.now().year - int(years.min())) if not years.empty else 0
+    years = df[year_col].dropna()
+    if not years.empty:
+        first_year = int(years.min())
+        active_years = max(1, datetime.datetime.now().year - first_year + 1)
+        m = h / active_years
+    else:
+        m = 0.0
 
     # B-index
     b = np.sqrt(sum(citations[:h])) if h > 0 else 0.0
@@ -34,26 +79,31 @@ def compute_bibliometric_indices(df, comparables=None):
     # V-index
     v = (h + g) / 2
 
-    # H relativo
-    h_max = max(comparables) if comparables else max([95, 82, 120, 135, 147, 168, 103])
-    h_rel = h / h_max if h_max > 0 else 0
-
     # i10-index
     i10 = sum(1 for c in citations if c >= 10)
 
-    # k-index (simplificado): raíz cuadrada del total de citas (a falta de definición específica)
+    # K-index
     k = round(np.sqrt(total_citations), 2)
 
-    # Índice H fraccional (suma 1/#autores por artículo con al menos h citas)
-    df_h_core = df[df["citations"] >= h]
-    fractional_h = 0
+    # H fraccional
+    df_h_core = df[df[citation_col] >= h]
+    fractional_h = 0.0
     for _, row in df_h_core.iterrows():
-        num_authors = len(row["authors"].split(";")) if pd.notna(row["authors"]) else 1
-        fractional_h += 1 / num_authors
+        authors = row.get("authors", "")
+        n_authors = len([a for a in str(authors).split(";") if a.strip() != ""]) or 1
+        fractional_h += 1 / n_authors
 
-    # Autorank (propuesto): promedio ponderado de h, g, i10, b y total citas
+    # Autorank (promedio ponderado)
     autorank = round((h + g + i10 + b + total_citations / 100) / 5, 2)
 
+    # H relativo
+    if comparables and len(comparables) > 0:
+        h_max = max(comparables)
+    else:
+        h_max = max([95, 82, 120, 135, 147, 168, 103])
+    h_rel = h / h_max if h_max > 0 else 0
+
+    # --- Resultado final ---
     return {
         "Total Artículos": len(citations),
         "Total Citas": total_citations,

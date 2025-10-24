@@ -1,22 +1,3 @@
-# Copyright (c) 2023 Minniti Julien
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of TFinder and associated documentation files, to deal
-# in TFinder without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of TFinder, and to permit persons to whom TFinder is
-# furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of TFinder.
-
-# TFINDER IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH TFINDER OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
 
 import streamlit as st
 import matplotlib.pyplot as plt
@@ -37,6 +18,7 @@ def allapp_page():
     # Barra lateral funcional donde se importan las metricas principales
     df_metricas = st.session_state.df_metricas
     df_trabajos = st.session_state.df_trabajos
+    df_master = st.session_state.df_master
 
     # Formatear números
     def format_metric(value):
@@ -189,6 +171,9 @@ def allapp_page():
             """,
             unsafe_allow_html=True
         )
+    # *****************************************************************************************
+    # GRAFICAS DEL PERFIL DEL INVESTIGADOR    
+    # *****************************************************************************************
 
     st.divider()
     st.markdown(
@@ -202,84 +187,88 @@ def allapp_page():
         unsafe_allow_html=True
     )
 
+    st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
+
     # Crear columnas
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
-    # Gráfica 1
+    # Posicion de Firma Coautoria
     with col1:
-        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Frecuencia de Firmas por Posición de Autoría</div>", unsafe_allow_html=True)
-        fig1, ax1 = plt.subplots()
-        ax1.plot([1, 2, 3], [4, 5, 6])
-        st.pyplot(fig1)
+        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Posición de Su Firma en Coautoría</div>", unsafe_allow_html=True)
+        graficas.red_colaboraciones(df_master, st.session_state.get('author_name', 'Autor desconocido'))
 
-    # Gráfica 2
+    # Mapa de Colaboracion
     with col2:
-        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Colaboraciones Globales</div>", unsafe_allow_html=True)
-        fig2, ax2 = plt.subplots()
-        ax2.bar([1, 2, 3], [3, 1, 2])
-        st.pyplot(fig2)
-
-    # Gráfica 3
-    with col3:
         st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Mapa de Colaboraciones</div>", unsafe_allow_html=True)
-        fig3, ax3 = plt.subplots()
-        ax3.scatter([1, 2, 3], [6, 4, 5])
-        st.pyplot(fig3)
+        graficas.graficar_mapa_colaboraciones_internacionales(df_master, st.session_state.get('author_name', 'Autor desconocido'))
 
-    # Analisis de Publicaciones
+    # Redes de Coautoria
+    with col3:
+        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Redes de Coautoria</div>", unsafe_allow_html=True)
+        graficas.red_coautoria(df_master, st.session_state.get('author_name', 'Autor desconocido'))
 
+    # Redes de Instituciones
+    with col4:
+        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Redes de Instituciones/div>", unsafe_allow_html=True)
+        graficas.red_colaboracion_instituciones(df_master, st.session_state.get('author_name', 'Autor desconocido'))
+
+    # *****************************************************************************************
+    # Analisis de Citacion
+    # *****************************************************************************************
+
+    st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
     st.markdown(
         "<div style='text-align: left; color: gray; font-size: 20px;'>Análisis de Publicaciones</div>",
         unsafe_allow_html=True
     )
-
+    st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
     # Crear columnas
     col1, col2, col3 = st.columns(3)
 
     # Gráfica 1
     with col1:
         st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Frecuencia de Publicación</div>", unsafe_allow_html=True)
-        fig1, ax1 = plt.subplots()
-        ax1.plot([1, 2, 3], [4, 5, 6])
-        st.pyplot(fig1)
+        graficas.graficar_publicaciones_por_anio(df_master)
 
     # Gráfica 2
     with col2:
-        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Crecimiento Acumulado de Articulos</div>", unsafe_allow_html=True)
-        fig2, ax2 = plt.subplots()
-        ax2.bar([1, 2, 3], [3, 1, 2])
-        st.pyplot(fig2)
+        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Frecuencia de Citación</div>", unsafe_allow_html=True)
+        graficas.graficar_citas_por_anio(df_master, st.session_state.get('author_name', 'Autor desconocido'))
 
     # Gráfica 3
     with col3:
-        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Crecimiento Acumulado de Citas</div>", unsafe_allow_html=True)
-        fig3, ax3 = plt.subplots()
-        ax3.scatter([1, 2, 3], [6, 4, 5])
-        st.pyplot(fig3)
+        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Modelo de Crecimiento Acumulado de Citas</div>", unsafe_allow_html=True)
+        graficas.graficar_modelos_crecimiento_citas(df_master, st.session_state.get('author_name', 'Autor desconocido'))
 
-    # Analisis Avanzado
+    # *****************************************************************************************
+    # Analisis de las Publicaciones
+    # *****************************************************************************************
 
+    st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
     st.markdown(
-        "<div style='text-align: left; color: gray; font-size: 20px;'>Análisis</div>",
+        "<div style='text-align: left; color: gray; font-size: 20px;'>Análisis de las Publicaciones</div>",
         unsafe_allow_html=True
     )
+    st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
 
     # Crear columnas
     col1, col2 = st.columns(2)
 
     # Gráfica 1
     with col1:
-        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Análisis de Interferencias</div>", unsafe_allow_html=True)
-        fig1, ax1 = plt.subplots()
-        ax1.plot([1, 2, 3], [4, 5, 6])
-        st.pyplot(fig1)
+        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Nube de Palabras de acuerdo a los Titulos</div>", unsafe_allow_html=True)
+        graficas.graficar_nube_titulos(df_master)
 
     # Gráfica 2
     with col2:
-        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Análisis ML Supervisado y No Supervisado</div>", unsafe_allow_html=True)
-        fig2, ax2 = plt.subplots()
-        ax2.bar([1, 2, 3], [3, 1, 2])
-        st.pyplot(fig2)
+        st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Nube de Palabras de acuerdo a los Abstracts</div>", unsafe_allow_html=True)
+        graficas.graficar_nube_abstracts(df_master)
+
+    st.markdown(
+        "<div style='text-align: left; color: gray; font-size: 20px;'>Análisis de Texto</div>",
+        unsafe_allow_html=True
+    )
+    st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
 
     st.info("📄 Para exportar esta visualización, presiona `Ctrl + P` / `Cmd + P` y elige 'Guardar como PDF'.")
 

@@ -157,7 +157,8 @@ def mostrar_sidebar():
 
                         st.sidebar.markdown(f"""
                         <div style="background-color: #d4edda; padding: 10px; border-radius: 5px;">
-                        <b>✅ Autor encontrado:</b> {display_name}<br>
+                        <b>✅</b>
+                        <b>Autor encontrado:</b> {display_name}<br>
                         <b>Total Publicaciones:</b> {total_publicaciones_fmt}<br>
                         <b>Total Citas:</b> {total_citas_fmt}
                         </div>
