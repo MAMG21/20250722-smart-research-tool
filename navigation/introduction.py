@@ -28,9 +28,6 @@ def home_page():
     st.markdown(
         "<h3 style='text-align: center; color: black;'>📊 Evaluación del Impacto Científico de Investigadores en Física y Astronomía</h1>",
         unsafe_allow_html=True)
-    with open('./clock.time', 'r') as f:
-        last_updated_on = f.readlines()[0]
-    st.caption(last_updated_on)
     st.markdown('')
     st.markdown('**Introducción**')
     st.markdown(
