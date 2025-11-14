@@ -59,6 +59,7 @@ def fetch_author_works(author_id, email):
 
                     if authorship.get("countries"):
                         countries_list.extend(authorship["countries"])
+
                     if authorship.get("institutions"):
                         for inst in authorship["institutions"]:
                             if inst and inst.get("display_name"):
@@ -76,6 +77,11 @@ def fetch_author_works(author_id, email):
                 inverted_abstract = w.get("abstract_inverted_index")
                 abstract_text = reconstruct_abstract(inverted_abstract)
 
+                # --- Agregacion de los años ---
+                counts_by_year = w.get("counts_by_year", [])
+                counts_years = [c.get("year") for c in counts_by_year] if counts_by_year else []
+                counts_citations = [c.get("cited_by_count") for c in counts_by_year] if counts_by_year else []
+
                 # --- Fila de datos ---
                 all_rows.append({
                     "id": w.get("id", "N/A"),
@@ -88,12 +94,14 @@ def fetch_author_works(author_id, email):
                     "cited_by_count": w.get("cited_by_count", 0),
                     "authors": "; ".join(author_names),
                     "author_count": len(author_names),
-                    "countries": "; ".join(set(countries_list)),
-                    "institutions": "; ".join(set(institutions_list)),
+                    "countries_list": "; ".join(set(countries_list)),
+                    "institutions_list": "; ".join(set(institutions_list)),
                     "research_fields": "; ".join(concepts_list),
                     "venue_name": venue_name,
                     "source_type": source.get("type", "N/A"),
-                    "author_id": author_id
+                    "author_id": author_id,
+                    "counts_by_year.year": counts_years,
+                    "counts_by_year.cited_by_count": counts_citations
                 })
 
             except Exception as e:
@@ -103,30 +111,19 @@ def fetch_author_works(author_id, email):
 
         page += 1
         time.sleep(0.1)
+    
+    if all_rows:
+        df_master = pd.DataFrame(all_rows).dropna(subset=['publication_year', 'cited_by_count'])
+        df_master['publication_year'] = df_master['publication_year'].astype(int)
+        print(f"\n🚀 DataFrame Maestro creado con éxito. Contiene {len(df_master)} publicaciones.")
+        df_master.info()
+    else:
+        print("No se encontraron publicaciones válidas para el autor.")
+    
+    df_master = df_master[
+        (df_master['type'] == 'article') &
+        (df_master['source_type'].isin(['journal']))
+    ].copy()
 
     print(f"🚀 Extracción finalizada. Total de publicaciones: {len(all_rows)}")
     return pd.DataFrame(all_rows)
-
-# --- BLOQUE DE EJEMPLO ---
-#if __name__ == "__main__":
-#    author_name = "Adam Riess"
-#    polite_email = "tu_email@ejemplo.com"
-#
-#    print(f"🔍 Buscando autor: {author_name}")
-#    try:
-#        search_url = "https://api.openalex.org/authors"
-#        params = {"search": author_name, "mailto": polite_email}
-#        resp = requests.get(search_url, params=params)
-#        resp.raise_for_status()
-#        author_data = resp.json()["results"][0]
-#        author_id = author_data["id"].split("/")[-1]
-#        author_display_name = author_data["display_name"]
-#
-#        print(f"✅ Autor encontrado: {author_display_name} (ID: {author_id})")
-#
-#        # --- Llamar a la función ---
-#        df_works = fetch_author_works(author_id, polite_email)
-#        print(df_works.head())
-#
-#    except Exception as e:
-#        print(f"❌ Error general: {e}")

@@ -130,7 +130,7 @@ st.logo("img/analisis.png")
 def mostrar_sidebar():
     st.sidebar.image("img/cientifico.png")
     st.sidebar.title("Análisis Bibliométrico")
-    author_name = st.sidebar.text_input("Nombre del autor", value="Yann LeCun")
+    author_name = st.sidebar.text_input("Nombre del autor", value="Viatcheslav Mukhanov")
 
     if st.sidebar.button("Analizar Autor"):
         with st.sidebar:

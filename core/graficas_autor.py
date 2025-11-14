@@ -20,329 +20,549 @@ from sklearn.metrics import r2_score, mean_absolute_error
 import matplotlib.pyplot as plt
 import base64
 from io import BytesIO
-
+import seaborn as sns
 
 # ============================================================
 # 1️⃣ Publicaciones por año
 # ============================================================
-def graficar_publicaciones_por_anio(df_master):
+def graficar_publicaciones_por_anio(df_master, author_display_name):
     """
-    Grafica la cantidad de publicaciones por año (dinámica con Plotly).
-    Acepta tanto 'Año' como 'publication_year' como nombre de columna.
+    Grafica la cantidad de publicaciones por año usando Plotly (para Streamlit).
     """
 
+    # --- Validación del DataFrame ---
     if df_master is None or df_master.empty:
-        st.warning("⚠️ No hay datos para graficar publicaciones por año.")
+        st.warning("⚠️ No se pudo generar el gráfico: el DataFrame está vacío o no existe.")
         return
 
-    # Detectar nombre de columna correcto
-    if "Año" in df_master.columns:
-        year_col = "Año"
-    elif "publication_year" in df_master.columns:
-        year_col = "publication_year"
-    else:
-        st.warning("⚠️ No se encontró ninguna columna de año ('Año' o 'publication_year').")
+    if "publication_year" not in df_master.columns:
+        st.warning("⚠️ El DataFrame no contiene la columna 'publication_year'.")
         return
 
-    # Eliminar filas sin año
-    df_valid = df_master[df_master[year_col].notna()].copy()
+    # --- Preparar los datos ---
+    publications_by_year = df_master["publication_year"].value_counts().sort_index()
+    publications_by_year = publications_by_year.loc[publications_by_year.index >= 1900]
 
-    if df_valid.empty:
-        st.warning("⚠️ No hay valores válidos de año para graficar.")
-        return
+    # Asegurar años continuos hasta 2025
+    all_years = pd.Series(0, index=range(publications_by_year.index.min(), 2026))
+    publications_by_year = all_years.add(publications_by_year, fill_value=0).astype(int)
 
-    # Contar publicaciones por año
-    df_counts = (
-        df_valid.groupby(year_col)
-        .size()
-        .reset_index(name="Publicaciones")
-        .sort_values(year_col)
-    )
+    # Crear DataFrame resumido
+    publications_df = pd.DataFrame({
+        "year": publications_by_year.index,
+        "count": publications_by_year.values
+    })
 
-    # Crear gráfica interactiva
+    # Asegurar que el nombre del autor no cause errores
+    if not author_display_name:
+        author_display_name = ""
+
+    # --- Crear gráfico interactivo ---
     fig = px.bar(
-        df_counts,
-        x=year_col,
-        y="Publicaciones",
-        text="Publicaciones",
-        template="plotly_white"
+        publications_df,
+        x="year",
+        y="count",
+        text="count",  # Etiquetas de datos
+        labels={"year": "Año de publicación", "count": "Número de artículos"},
+        color_discrete_sequence=["dodgerblue"]
     )
 
-    # Ajustes visuales
-    fig.update_traces(textposition="outside", marker_color="rgb(0, 102, 204)")
+    # Configurar etiquetas y estilo
+    fig.update_traces(
+        texttemplate="%{text}",
+        textposition="outside",
+        hovertemplate="Año: %{x}<br>Publicaciones: %{y}<extra></extra>"
+    )
+
     fig.update_layout(
-        xaxis_title="Año",
-        yaxis_title="Número de publicaciones",
+        title="",
+        showlegend=False,
+        plot_bgcolor="white",
+        xaxis=dict(tickangle=45),
+        height=350,
         margin=dict(l=20, r=20, t=20, b=20),
-        height=400
+        autosize=True
     )
 
+    # --- Mostrar en Streamlit ---
     st.plotly_chart(fig, use_container_width=True)
 
-
+    # --- Guardar PDF opcional ---
+    safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
+    filename_hist = f'histograma_articulos_{safe_author_name}.pdf'
+    fig.write_image(filename_hist)
 
 # ============================================================
 # 2️⃣ Citas por año
 # ============================================================
 def graficar_citas_por_anio(df_master, author_display_name):
     """
-    Grafica la cantidad de citas por año (dinámica con Plotly).
+    Grafica la cantidad de citas por año usando Plotly (versión limpia para Streamlit).
     """
 
     if df_master is None or df_master.empty:
-        st.warning("⚠️ El DataFrame maestro está vacío.")
+        st.warning("⚠️ No se pudo generar el gráfico: el DataFrame está vacío o no existe.")
         return
 
-    df = df_master.copy()
-    if "year" not in df.columns:
-        if "publication_year" in df.columns:
-            df["year"] = df["publication_year"]
+    # --- Funciones auxiliares ---
+    def safe_split(x):
+        """Convierte un string tipo '2025|2024|2023' en lista ['2025','2024','2023']"""
+        if isinstance(x, str) and "|" in x:
+            return x.split("|")
+        elif isinstance(x, str):
+            return [x]
+        elif isinstance(x, list):
+            return x
         else:
-            st.warning("⚠️ No se encontró columna de año ('year').")
-            return
+            return []
 
-    if "citations" not in df.columns:
-        if "cited_by_count" in df.columns:
-            df["citations"] = df["cited_by_count"]
-        else:
-            df["citations"] = 0
+    def to_int_list(lst):
+        out = []
+        for val in lst:
+            try:
+                out.append(int(val))
+            except:
+                out.append(0)
+        return out
 
-    df_cit = df.groupby("year", as_index=False)["citations"].sum().sort_values("year")
+    df_master["year_list"] = df_master["counts_by_year.year"].apply(safe_split)
+    df_master["cited_list"] = df_master["counts_by_year.cited_by_count"].apply(safe_split)
 
-    fig = px.bar(df_cit, x='year', y='citations', template='plotly_white')
-    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=400)
+    df_master["year_list"] = df_master["year_list"].apply(to_int_list)
+    df_master["cited_list"] = df_master["cited_list"].apply(to_int_list)
+
+    # --- Desanidar datos ---
+    expanded_rows = []
+    for _, row in df_master.iterrows():
+        years = row["year_list"]
+        cites = row["cited_list"]
+        if len(years) == len(cites) and len(years) > 0:
+            for y, c in zip(years, cites):
+                expanded_rows.append({"year": y, "cited_by_count": c})
+
+    if len(expanded_rows) == 0:
+        st.warning("⚠️ No se pudieron expandir los datos: revisa las columnas 'counts_by_year.*'.")
+        return
+
+    citations_df = pd.DataFrame(expanded_rows)
+    citations_summary = (
+        citations_df.groupby("year", as_index=False)
+        .agg({"cited_by_count": "sum"})
+        .sort_values("year", ascending=True)
+    )
+
+    # --- Gráfico interactivo con Plotly ---
+    fig = px.bar(
+        citations_summary,
+        x="year",
+        y="cited_by_count",
+        text="cited_by_count",
+        labels={"year": "Año", "cited_by_count": "Número total de citas"},
+        color_discrete_sequence=["dodgerblue"]
+    )
+
+    # Personalizar etiquetas
+    fig.update_traces(
+        texttemplate="%{text}",
+        textposition="outside",  # Muestra las etiquetas sobre las barras
+        hovertemplate="Año: %{x}<br>Citas: %{y}<extra></extra>"
+    )
+
+    # Estilo visual
+    fig.update_layout(
+        title="",
+        showlegend=False,
+        plot_bgcolor="white",
+        xaxis=dict(tickangle=45),
+        height=350,
+        margin=dict(l=20, r=20, t=20, b=20),
+        autosize=True
+    )
+
     st.plotly_chart(fig, use_container_width=True)
 
+    # --- Guardar PDF opcional ---
+    safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
+    filename_citas = f'citas_por_ano_{safe_author_name}.pdf'
+    fig.write_image(filename_citas)
 
 # ============================================================
 # 3️⃣ Posición de autoría (solo barras)
 # ============================================================
-def red_colaboraciones(df_master, author_display_name):
+def graficar_posicion_autoria(df_master, author_display_name):
     """
-    Grafica la cantidad de colaboraciones que ha tenido un autor de acuerdo
-    a la posicion de su firma en la autoria.
+    Grafica la frecuencia de aparición del autor según su posición en la lista de autores.
+    Compatible con Streamlit y coherente con la paleta azul de las otras gráficas.
     """
+
+    # --- Validaciones iniciales ---
     if df_master is None or df_master.empty:
-        st.warning("⚠️ No hay datos para generar la gráfica de colaboraciones.")
+        st.warning("⚠️ No se pudo generar el gráfico: el DataFrame está vacío o no existe.")
         return
 
     if "authors" not in df_master.columns:
-        st.warning("⚠️ No se encontró la columna 'authors'.")
+        st.warning("⚠️ El DataFrame no contiene la columna 'authors'.")
         return
 
-    pos_counts = Counter({'1er Autor': 0, '2do Autor': 0, '3er Autor': 0, '4to o más': 0})
+    if not author_display_name:
+        st.warning("⚠️ Debes proporcionar un nombre de autor válido.")
+        return
+
+    # --- Calcular la frecuencia por posición ---
+    pos_counts = {'1er Autor': 0, '2do Autor': 0, '3er Autor': 0, '4to o más': 0}
+
     for authors_str in df_master['authors'].dropna():
-        authors_list = [a.strip() for a in str(authors_str).split(';')]
+        authors_list = [author.strip() for author in authors_str.split(';')]
         try:
-            pos = authors_list.index(author_display_name) + 1
-            if pos == 1:
+            position = authors_list.index(author_display_name) + 1
+            if position == 1:
                 pos_counts['1er Autor'] += 1
-            elif pos == 2:
+            elif position == 2:
                 pos_counts['2do Autor'] += 1
-            elif pos == 3:
+            elif position == 3:
                 pos_counts['3er Autor'] += 1
             else:
                 pos_counts['4to o más'] += 1
         except ValueError:
             continue
 
-    df_pos = pd.DataFrame({
-        "Posición": list(pos_counts.keys()),
-        "Frecuencia": list(pos_counts.values())
-    })
+    # --- Crear DataFrame para graficar ---
+    plot_data = pd.DataFrame(list(pos_counts.items()), columns=['Posición', 'Frecuencia'])
 
-    fig = px.bar(df_pos, x="Posición", y="Frecuencia", text="Frecuencia", color="Posición",
-                 color_discrete_sequence=px.colors.sequential.Magma)
-    fig.update_traces(textposition="outside")
-    fig.update_layout(showlegend=False, template="plotly_white", height=400)
+    # Orden lógico de posiciones
+    orden_posiciones = ['1er Autor', '2do Autor', '3er Autor', '4to o más']
+    plot_data['Posición'] = pd.Categorical(plot_data['Posición'], categories=orden_posiciones, ordered=True)
+
+    # --- Crear gráfico con Plotly ---
+    fig = px.bar(
+        plot_data,
+        x="Posición",
+        y="Frecuencia",
+        text="Frecuencia",
+        color="Frecuencia",
+        color_continuous_scale="Blues"
+    )
+
+    # Etiquetas y formato
+    fig.update_traces(
+        texttemplate="%{text}",
+        textposition="outside",
+        hovertemplate="Posición: %{x}<br>Frecuencia: %{y}<extra></extra>"
+    )
+
+    fig.update_layout(
+        title="",
+        showlegend=False,
+        plot_bgcolor="white",
+        coloraxis_showscale=False,
+        xaxis_title="Posición en la lista de autores",
+        yaxis_title="Número de veces en esa posición",
+        height=350,
+        margin=dict(l=2, r=2, t=2, b=2),
+        autosize=True
+    )
+
+    # --- Mostrar en Streamlit ---
     st.plotly_chart(fig, use_container_width=True)
 
+    # --- Guardar PDF ---
+    safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
+    filename_posicion = f'posicion_autoria_{safe_author_name}.pdf'
+    fig.write_image(filename_posicion)
 
 # ============================================================
 # 4️⃣ Red de coautoría (mantiene nodos)
 # ============================================================
-def red_coautoria(df_master, author_display_name):
+def graficar_red_coautoria(df_master, author_display_name):
     """
-    Grafica los 10 coautores con los que ha trabajado el autor que se 
-    está analizando.
+    Grafica la red de coautoría del autor principal (interactiva con Plotly y Streamlit).
+    Usa tonos azules (paleta 'Blues') y destaca al autor principal en color salmón.
     """
+
+    # --- Validaciones ---
     if df_master is None or df_master.empty:
-        st.warning("⚠️ No hay datos para generar la red de coautoría.")
+        st.warning("⚠️ No se pudo generar la red: el DataFrame está vacío o no existe.")
         return
-    if 'authors' not in df_master.columns:
-        st.warning("⚠️ No existe la columna 'authors'.")
+
+    if "authors" not in df_master.columns:
+        st.warning("⚠️ El DataFrame no contiene la columna 'authors'.")
+        return
+
+    if not author_display_name:
+        st.warning("⚠️ Debes proporcionar un nombre de autor válido.")
         return
 
     autor_principal = author_display_name
-    coauthor_counter = Counter()
 
-    # Contar coautores
-    for author_list_str in df_master['authors'].dropna():
-        authors_in_paper = [a.strip() for a in author_list_str.split(';')]
+    # --- Contar coautores ---
+    coauthor_counter = Counter()
+    for author_list_str in df_master["authors"].dropna():
+        authors_in_paper = [name.strip() for name in author_list_str.split(";")]
         if autor_principal in authors_in_paper:
-            authors_in_paper = [a for a in authors_in_paper if a != autor_principal]
+            authors_in_paper.remove(autor_principal)
             coauthor_counter.update(authors_in_paper)
 
-    # ✅ Solo los 10 coautores más frecuentes
-    top_coauthors = coauthor_counter.most_common(10)
-    if not top_coauthors:
-        st.warning("⚠️ No se encontraron coautores.")
+    top_5_coauthors = coauthor_counter.most_common(5)
+    if not top_5_coauthors:
+        st.warning(f"⚠️ No se encontraron coautores para {autor_principal}.")
         return
 
+    # --- Crear grafo ---
     G = nx.Graph()
     G.add_node(autor_principal)
-    for co, w in top_coauthors:
-        G.add_node(co)
-        G.add_edge(autor_principal, co, weight=w)
+    for coauthor, count in top_5_coauthors:
+        G.add_node(coauthor)
+        G.add_edge(autor_principal, coauthor, weight=count)
 
-    pos = nx.spring_layout(G, seed=42)
+    # --- Layout y posiciones ---
+    pos = nx.spring_layout(G, seed=42, k=0.8, iterations=150)
 
-    # Aristas
+    # --- Extraer coordenadas ---
     edge_x, edge_y = [], []
-    for u, v in G.edges():
-        x0, y0 = pos[u]
-        x1, y1 = pos[v]
+    for edge in G.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
 
     edge_trace = go.Scatter(
-        x=edge_x, y=edge_y,
-        line=dict(width=1, color='rgba(150,150,150,0.6)'),
-        mode='lines',
-        hoverinfo='none'
+        x=edge_x,
+        y=edge_y,
+        line=dict(width=1.5, color="gray"),
+        hoverinfo="none",
+        mode="lines"
     )
 
-    # Nodos
-    node_x, node_y, text, size, color = [], [], [], [], []
-    for n in G.nodes():
-        x, y = pos[n]
+    # --- Nodos ---
+    node_x, node_y, node_color, node_size, node_text = [], [], [], [], []
+    max_weight = max([count for _, count in top_5_coauthors]) if top_5_coauthors else 1
+
+    for node in G.nodes():
+        x, y = pos[node]
         node_x.append(x)
         node_y.append(y)
-        if n == autor_principal:
-            size.append(40)
-            color.append('blue')
+
+        if node == autor_principal:
+            color = "salmon"
+            size = 30
+            text = f"{node} (Autor principal)"
         else:
-            size.append(15 + coauthor_counter.get(n, 0) * 2)
-            color.append('salmon')
-        text.append(f"{n} ({coauthor_counter.get(n, 0)})")
+            count = dict(top_5_coauthors).get(node, 1)
+            intensity = 0.3 + 0.7 * (count / max_weight)
+            color = f"rgba(30, 144, 255, {intensity})"  # Azul tipo 'dodgerblue' con transparencia
+            size = 20 + (count / max_weight) * 10
+            text = f"{node}<br>{count} publicaciones conjuntas"
+
+        node_color.append(color)
+        node_size.append(size)
+        node_text.append(text)
 
     node_trace = go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers+text',
-        text=[n for n in G.nodes()],
-        hovertext=text,
-        hoverinfo='text',
+        x=node_x,
+        y=node_y,
+        mode="markers+text",
         textposition="bottom center",
-        marker=dict(size=size, color=color, line=dict(width=1, color='white'))
+        hoverinfo="text",
+        text=[n for n in G.nodes()],
+        marker=dict(
+            showscale=False,
+            color=node_color,
+            size=node_size,
+            line_width=1.5
+        )
     )
 
+    # --- Crear figura ---
     fig = go.Figure(data=[edge_trace, node_trace])
     fig.update_layout(
         showlegend=False,
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
-        template="plotly_white",
-        height=450,
-        margin=dict(l=0, r=0, t=0, b=0)
+        plot_bgcolor="white",
+        height=350,
+        margin=dict(l=2, r=2, t=2, b=2),
+        autosize=True,
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
     )
 
+    # --- Auto-zoom dinámico ---
+    padding = 0.15
+    x_min, x_max = min(node_x), max(node_x)
+    y_min, y_max = min(node_y), max(node_y)
+
+    fig.update_xaxes(
+        visible=False,
+        range=[x_min - padding, x_max + padding]
+    )
+    fig.update_yaxes(
+        visible=False,
+        scaleanchor="x",
+        scaleratio=1,
+        range=[y_min - padding, y_max + padding]
+    )
+
+    # --- Mostrar en Streamlit ---
     st.plotly_chart(fig, use_container_width=True)
 
-
+    # --- Guardar PDF ---
+    safe_author_name = autor_principal.replace(" ", "_").replace(".", "").lower()
+    pdf_filename = f"red_coautoria_{safe_author_name}.pdf"
+    fig.write_image(pdf_filename)
 
 # ============================================================
 # 5️⃣ Red de colaboración entre instituciones (mantiene nodos)
 # ============================================================
-def red_colaboracion_instituciones(df_master, author_display_name):
+def graficar_red_instituciones(df_master, author_display_name):
     """
-    Grafica las 10 instituciones con las que ha trabajado el autor que se 
-    está analizando, mostrando una red basada en las coocurrencias
-    institucionales dentro de sus publicaciones.
+    Grafica la red de colaboración institucional del autor principal.
+    - Muestra la institución principal en color salmón.
+    - Colaboradoras en tonos de azul (paleta tipo 'Blues').
+    - Gráfico interactivo con Plotly.
     """
 
+    # --- Validaciones ---
     if df_master is None or df_master.empty:
-        st.warning("⚠️ No hay datos para generar la red de instituciones.")
+        st.warning("⚠️ No se pudo generar la red: el DataFrame está vacío o no existe.")
         return
 
-    posibles_cols = ["institutions_list", "institutions", "institution", "affiliations", "author_institutions"]
-    col_institutions = next((col for col in posibles_cols if col in df_master.columns), None)
-    if not col_institutions:
-        st.error("❌ No se encontró ninguna columna de instituciones.")
+    if "institutions_list" not in df_master.columns:
+        st.warning("⚠️ El DataFrame no contiene la columna 'institutions_list'.")
         return
 
-    # Construir red completa
+    autor_objetivo = author_display_name
+    df_autor = df_master.copy()
+
+    # --- Construcción del grafo ---
+    colaboraciones = Counter()
     G = nx.Graph()
-    for _, row in df_master.iterrows():
-        if pd.isna(row.get(col_institutions)):
+
+    for _, row in df_autor.iterrows():
+        if pd.isna(row["institutions_list"]):
             continue
-        instituciones = [inst.strip() for inst in str(row[col_institutions]).split(";") if inst.strip()]
+
+        instituciones = set(inst.strip() for inst in str(row["institutions_list"]).split(";") if inst.strip())
+        instituciones = list(instituciones)
+
         for i in range(len(instituciones)):
             for j in range(i + 1, len(instituciones)):
-                a, b = instituciones[i], instituciones[j]
-                if G.has_edge(a, b):
-                    G[a][b]['weight'] += 1
-                else:
-                    G.add_edge(a, b, weight=1)
+                inst1, inst2 = tuple(sorted((instituciones[i], instituciones[j])))
+                colaboraciones[(inst1, inst2)] += 1
+                G.add_edge(inst1, inst2, weight=colaboraciones[(inst1, inst2)])
 
-    if G.number_of_nodes() == 0:
-        st.warning("⚠️ No se encontraron instituciones para graficar.")
+    # --- Identificar institución principal ---
+    todas_instituciones = [
+        inst.strip()
+        for sublist in df_autor["institutions_list"].dropna().str.split(";")
+        for inst in sublist if inst.strip()
+    ]
+    if not todas_instituciones:
+        st.warning("⚠️ No hay instituciones válidas en los datos.")
         return
 
-    # ✅ Filtrar el top 10 instituciones con más conexiones (grado)
-    top_institutions = sorted(G.degree, key=lambda x: x[1], reverse=True)[:10]
-    top_nodes = [n for n, _ in top_institutions]
-    G_sub = G.subgraph(top_nodes).copy()
+    institucion_principal = Counter(todas_instituciones).most_common(1)[0][0]
 
-    pos = nx.spring_layout(G_sub, seed=42)
+    # --- Filtrar colaboraciones relevantes ---
+    colaboraciones_principales = Counter()
+    for (inst1, inst2), w in colaboraciones.items():
+        if inst1 == institucion_principal:
+            colaboraciones_principales[inst2] += w
+        elif inst2 == institucion_principal:
+            colaboraciones_principales[inst1] += w
 
-    # --- Aristas ---
-    edge_x, edge_y = [], []
-    for u, v in G_sub.edges():
-        x0, y0 = pos[u]
-        x1, y1 = pos[v]
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
+    top_5 = dict(colaboraciones_principales.most_common(5))
+    if not top_5:
+        st.warning(f"⚠️ No se encontraron colaboraciones para '{institucion_principal}'.")
+        return
 
-    edge_trace = go.Scatter(
-        x=edge_x, y=edge_y,
-        line=dict(width=1, color='rgba(150,150,150,0.6)'),
-        mode='lines',
-        hoverinfo='none'
-    )
+    # --- Crear layout circular ---
+    G_sub = nx.Graph()
+    G_sub.add_node(institucion_principal)
+    for nodo, w in top_5.items():
+        G_sub.add_node(nodo)
+        G_sub.add_edge(institucion_principal, nodo, weight=w)
+
+    n = len(top_5)
+    radius = 4.0
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    pos = {institucion_principal: np.array([0, 0])}
+    for i, nodo in enumerate(top_5.keys()):
+        pos[nodo] = np.array([radius * np.cos(angles[i]), radius * np.sin(angles[i])])
+
+    # --- Aristas (cada una con su propio grosor) ---
+    edge_traces = []
+    max_w = max(top_5.values()) if top_5 else 1
+
+    for nodo, w in top_5.items():
+        x0, y0 = pos[institucion_principal]
+        x1, y1 = pos[nodo]
+
+        edge_traces.append(
+            go.Scatter(
+                x=[x0, x1],
+                y=[y0, y1],
+                mode="lines",
+                line=dict(width=1.5 + 3 * (w / max_w), color="gray"),
+                hoverinfo="none"
+            )
+        )
 
     # --- Nodos ---
-    node_x, node_y, size, color, text = [], [], [], [], []
-    for n in G_sub.nodes():
-        x, y = pos[n]
+    node_x, node_y, node_color, node_size, node_text = [], [], [], [], []
+    for node in G_sub.nodes():
+        x, y = pos[node]
         node_x.append(x)
         node_y.append(y)
-        degree = G_sub.degree[n]
-        size.append(10 + degree * 3)
-        color.append('salmon')
-        text.append(f"{n} ({degree})")
+
+        if node == institucion_principal:
+            color = "salmon"
+            size = 35
+            text = f"{node} (Institución principal)"
+        else:
+            w = top_5[node]
+            intensity = 0.3 + 0.7 * (w / max_w)
+            color = f"rgba(30, 144, 255, {intensity})"  # Azul tipo 'Blues'
+            size = 22 + (w / max_w) * 10
+            text = f"{node}<br>{w} publicaciones conjuntas"
+
+        node_color.append(color)
+        node_size.append(size)
+        node_text.append(text)
 
     node_trace = go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers+text',
+        x=node_x,
+        y=node_y,
+        mode="markers+text",
         text=[n for n in G_sub.nodes()],
-        hovertext=text,
-        hoverinfo='text',
         textposition="bottom center",
-        marker=dict(size=size, color=color, line=dict(width=1, color='white'))
+        hoverinfo="text",
+        hovertext=node_text,
+        marker=dict(
+            showscale=False,
+            color=node_color,
+            size=node_size,
+            line_width=1.5,
+            line=dict(color="darkblue", width=1)
+        )
     )
 
-    # --- Figura final ---
-    fig = go.Figure(data=[edge_trace, node_trace])
+    # --- Crear figura ---
+    fig = go.Figure(data=edge_traces + [node_trace])
     fig.update_layout(
         showlegend=False,
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
-        template="plotly_white",
-        height=450,
-        margin=dict(l=0, r=0, t=0, b=0)
+        plot_bgcolor="white",
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        height=350,
+        margin=dict(l=20, r=20, t=20, b=20),
+        autosize=True
     )
 
+    # --- Mostrar en Streamlit ---
     st.plotly_chart(fig, use_container_width=True)
+
+    # --- Guardar PDF ---
+    safe_author_name = autor_objetivo.replace(" ", "_").replace(".", "").lower()
+    pdf_filename = f"red_instituciones_{safe_author_name}.pdf"
+    fig.write_image(pdf_filename)
 
 # ============================================================
 # 6️⃣ Mapa de colaboraciones internacionales
@@ -352,248 +572,479 @@ def graficar_mapa_colaboraciones_internacionales(df_master, author_display_name)
     Muestra un mapa mundial con las colaboraciones internacionales
     del autor especificado. Usa coordenadas fijas (sin geopy).
     """
+    # --- VALIDACIÓN INICIAL ---
+    if df_master is None or df_master.empty:
+        st.warning("⚠️ No hay datos disponibles para generar el mapa de colaboración.")
+        return
 
-    # Coordenadas fijas por país (ISO-2)
+    df_autor = df_master.copy()
+
+    # --- Coordenadas fijas por país (ISO-2) ---
     COORDS_BACKUP = {
-        "US": (37.0902, -95.7129),
-        "CA": (56.1304, -106.3468),
-        "DE": (51.1657, 10.4515),
-        "CH": (46.8182, 8.2275),
-        "IL": (31.0461, 34.8516),
-        "FR": (46.6034, 1.8883),
-        "GB": (55.3781, -3.4360),
-        "AR": (-38.4161, -63.6167),
-        "CL": (-35.6751, -71.5430),
-        "CO": (4.5709, -74.2973),
-        "BR": (-14.2350, -51.9253),
-        "ES": (40.4637, -3.7492),
-        "IT": (41.8719, 12.5674),
-        "JP": (36.2048, 138.2529),
+        "AR": (-38.4161, -63.6167),   # Argentina
+        "BR": (-14.2350, -51.9253),   # Brasil
+        "CA": (56.1304, -106.3468),   # Canadá
+        "CH": (46.8182, 8.2275),      # Suiza
+        "CL": (-35.6751, -71.5430),   # Chile
+        "CO": (4.5709, -74.2973),     # Colombia
+        "DE": (51.1657, 10.4515),     # Alemania
+        "ES": (40.4637, -3.7492),     # España
+        "FR": (46.6034, 1.8883),      # Francia
+        "GB": (55.3781, -3.4360),     # Reino Unido
+        "IL": (31.0461, 34.8516),     # Israel
+        "IT": (41.8719, 12.5674),     # Italia
+        "JP": (36.2048, 138.2529),    # Japón
+        "LB": (33.8547, 35.8623),     # Líbano
+        "RU": (61.5240, 105.3188),    # Rusia
+        "US": (37.0902, -95.7129),    # Estados Unidos
+
+        # --- Continúo con más de 100 países ---
+        "MX": (23.6345, -102.5528),   # México
+        "PE": (-9.1899, -75.0152),    # Perú
+        "EC": (-1.8312, -78.1834),    # Ecuador
+        "BO": (-16.2902, -63.5887),   # Bolivia
+        "PY": (-23.4425, -58.4438),   # Paraguay
+        "UY": (-32.5228, -55.7658),   # Uruguay
+        "VE": (6.4238, -66.5897),     # Venezuela
+        "AU": (-25.2744, 133.7751),   # Australia
+        "NZ": (-40.9006, 174.8860),   # Nueva Zelanda
+        "CN": (35.8617, 104.1954),    # China
+        "KR": (35.9078, 127.7669),     # Corea del Sur
+        "IN": (20.5937, 78.9629),     # India
+        "PK": (30.3753, 69.3451),     # Pakistán
+        "BD": (23.6850, 90.3563),     # Bangladés
+        "NP": (28.3949, 84.1240),     # Nepal
+        "TH": (15.8700, 100.9925),    # Tailandia
+        "VN": (14.0583, 108.2772),    # Vietnam
+        "PH": (12.8797, 121.7740),    # Filipinas
+        "ID": (-0.7893, 113.9213),    # Indonesia
+        "MY": (4.2105, 101.9758),     # Malasia
+        "SG": (1.3521, 103.8198),     # Singapur
+        "SA": (23.8859, 45.0792),     # Arabia Saudita
+        "AE": (23.4241, 53.8478),     # Emiratos Árabes Unidos
+        "QA": (25.3548, 51.1839),     # Catar
+        "KW": (29.3117, 47.4818),     # Kuwait
+        "OM": (21.4735, 55.9754),     # Omán
+        "IR": (32.4279, 53.6880),     # Irán
+        "IQ": (33.2232, 43.6793),     # Irak
+        "JO": (30.5852, 36.2384),     # Jordania
+        "SY": (34.8021, 38.9968),     # Siria
+        "TR": (38.9637, 35.2433),     # Turquía
+        "GR": (39.0742, 21.8243),     # Grecia
+        "PT": (39.3999, -8.2245),     # Portugal
+        "NL": (52.1326, 5.2913),      # Países Bajos
+        "BE": (50.5039, 4.4699),      # Bélgica
+        "LU": (49.8153, 6.1296),      # Luxemburgo
+        "AT": (47.5162, 14.5501),     # Austria
+        "PL": (51.9194, 19.1451),     # Polonia
+        "CZ": (49.8175, 15.4730),     # Chequia
+        "SK": (48.6690, 19.6990),     # Eslovaquia
+        "HU": (47.1625, 19.5033),     # Hungría
+        "RO": (45.9432, 24.9668),     # Rumanía
+        "BG": (42.7339, 25.4858),     # Bulgaria
+        "DK": (56.2639, 9.5018),      # Dinamarca
+        "NO": (60.4720, 8.4689),      # Noruega
+        "SE": (60.1282, 18.6435),     # Suecia
+        "FI": (61.9241, 25.7482),     # Finlandia
+        "IE": (53.1424, -7.6921),     # Irlanda
+        "IS": (64.9631, -19.0208),    # Islandia
+        "UA": (48.3794, 31.1656),     # Ucrania
+        "BY": (53.7098, 27.9534),     # Bielorrusia
+        "GE": (42.3154, 43.3569),     # Georgia
+        "AM": (40.0691, 45.0382),     # Armenia
+        "AZ": (40.1431, 47.5769),     # Azerbaiyán
+
+        # África (más de 30 países)
+        "ZA": (-30.5595, 22.9375),    # Sudáfrica
+        "EG": (26.8206, 30.8025),     # Egipto
+        "NG": (9.0820, 8.6753),       # Nigeria
+        "KE": (-0.0236, 37.9062),     # Kenia
+        "TZ": (-6.3690, 34.8888),     # Tanzania
+        "UG": (1.3733, 32.2903),      # Uganda
+        "ET": (9.1450, 40.4897),      # Etiopía
+        "SD": (12.8628, 30.2176),     # Sudán
+        "SS": (6.8770, 31.3070),      # Sudán del Sur
+        "MA": (31.7917, -7.0926),     # Marruecos
+        "DZ": (28.0339, 1.6596),      # Argelia
+        "TN": (33.8869, 9.5375),      # Túnez
+        "LY": (26.3351, 17.2283),     # Libia
+        "ML": (17.5707, -3.9962),     # Mali
+        "NE": (17.6078, 8.0817),      # Níger
+        "GH": (7.9465, -1.0232),      # Ghana
+        "CI": (7.5399, -5.5471),      # Costa de Marfil
+        "SN": (14.4974, -14.4524),    # Senegal
+        "GM": (13.4432, -15.3101),    # Gambia
+        "SL": (8.4606, -11.7799),     # Sierra Leona
+        "LR": (6.4281, -9.4295),      # Liberia
+        "CM": (7.3697, 12.3547),      # Camerún
+        "GA": (-0.8037, 11.6094),     # Gabón
+        "CG": (-0.2280, 15.8277),     # Congo
+        "CD": (-4.0383, 21.7587),     # R. D. Congo
+        "AO": (-11.2027, 17.8739),    # Angola
+        "ZM": (-13.1339, 27.8493),    # Zambia
+        "MW": (-13.2543, 34.3015),    # Malaui
+        "ZW": (-19.0154, 29.1549),    # Zimbabue
+        "BW": (-22.3285, 24.6849),    # Botsuana
+        "NA": (-22.9576, 18.4904),    # Namibia
+        "MG": (-18.7669, 46.8691),    # Madagascar
+
+        # Caribe y otros
+        "CU": (21.5218, -77.7812),    # Cuba
+        "DO": (18.7357, -70.1627),    # Rep. Dominicana
+        "HT": (18.9712, -72.2852),    # Haití
+        "JM": (18.1096, -77.2975),    # Jamaica
+        "BS": (25.0343, -77.3963),    # Bahamas
     }
 
-    # Validaciones iniciales
-    if df_master is None or df_master.empty:
-        st.warning("⚠️ El DataFrame maestro está vacío.")
-        return
-    if "countries" not in df_master.columns:
-        st.warning("⚠️ No existe la columna 'countries' en el DataFrame.")
-        return
-
-    df_autor = df_master[df_master["countries"].notna()].copy()
-    all_countries = (
-        df_autor["countries"]
-        .dropna()
-        .str.split(";")
-        .explode()
-        .str.strip()
-        .tolist()
-    )
+    # --- Encontrar país principal ---
+    all_countries = []
+    for country_list in df_autor['countries_list'].dropna():
+        countries = [c.strip() for c in country_list.split(';') if c.strip()]
+        all_countries.extend(countries)
 
     if not all_countries:
-        st.warning("⚠️ No se encontraron países asociados al autor.")
+        st.warning("❌ No se encontraron datos válidos de países en las publicaciones del autor.")
         return
 
-    # Determinar país principal y colaboradores
-    pais_principal = Counter(all_countries).most_common(1)[0][0]
-    collaboration_counter = Counter()
+    country_counter = Counter(all_countries)
+    pais_principal_code = country_counter.most_common(1)[0][0]
 
-    for countries_str in df_autor["countries"].dropna():
-        countries = {c.strip() for c in countries_str.split(";")}
-        countries.discard(pais_principal)
+    # --- Encontrar los 5 países más colaboradores ---
+    collaboration_counter = Counter()
+    for _, row in df_autor.iterrows():
+        if pd.isna(row['countries_list']):
+            continue
+        countries = set(row['countries_list'].split(';'))
+        countries = {c for c in countries if c.strip()}
+        countries.discard(pais_principal_code)
         collaboration_counter.update(countries)
 
-    top_collaborators = collaboration_counter.most_common(10)
+    top_collaborators = collaboration_counter.most_common(5)
+
     if not top_collaborators:
-        st.warning("⚠️ No se encontraron países colaboradores.")
+        st.warning("⚠️ No se encontraron colaboraciones internacionales registradas.")
         return
 
-    # Resolver coordenadas solo desde el diccionario
-    country_coords = {
-        code: COORDS_BACKUP[code]
-        for code in [pais_principal] + [c[0] for c in top_collaborators]
-        if code in COORDS_BACKUP
-    }
+    # --- Obtener coordenadas ---
+    all_country_codes = [pais_principal_code] + [c[0] for c in top_collaborators]
+    country_coords = {}
+    country_names = {}
 
-    if pais_principal not in country_coords:
-        st.warning(f"⚠️ No se pudo determinar la ubicación del país principal: {pais_principal}")
+    geolocator = Nominatim(user_agent="geo-app", timeout=8)
+
+    with st.spinner("🌐 Obteniendo coordenadas de los países..."):
+        for code in all_country_codes:
+            try:
+                country_obj = pycountry.countries.get(alpha_2=code)
+                if country_obj:
+                    country_names[code] = country_obj.name
+                    # ✅ Primero usar backup si existe
+                    if code in COORDS_BACKUP:
+                        country_coords[code] = COORDS_BACKUP[code]
+                    else:
+                        # Intentar geolocalización
+                        location = geolocator.geocode(country_obj.name)
+                        if location:
+                            country_coords[code] = (location.latitude, location.longitude)
+                            
+            except Exception as e:
+                st.error(f"❌ Error obteniendo coordenadas para {code}: {e}")
+                continue
+
+    if pais_principal_code not in country_coords:
+        st.error("❌ No se pudieron obtener coordenadas para el país principal.")
         return
 
-    lat0, lon0 = country_coords[pais_principal]
+    # --- Crear mapa interactivo ---
     fig = go.Figure()
+    lat_principal, lon_principal = country_coords[pais_principal_code]
+    max_collab = max([c[1] for c in top_collaborators]) if top_collaborators else 1
 
-    # Dibujar líneas entre el país principal y colaboradores
+    # --- Dibujar líneas de colaboración ---
     for country_code, count in top_collaborators:
-        if country_code in country_coords:
-            latc, lonc = country_coords[country_code]
+        if country_code in country_coords and country_code != pais_principal_code:
+            lat_colab, lon_colab = country_coords[country_code]
+            line_width = max(1, (count / max_collab) * 2)
+
             fig.add_trace(go.Scattergeo(
-                lon=[lon0, lonc],
-                lat=[lat0, latc],
-                mode="lines",
-                line=dict(width=1.5, color="crimson"),
-                hoverinfo="text",
-                text=f"{pais_principal} → {country_code}: {count} colaboraciones"
+                lon=[lon_principal, lon_colab],
+                lat=[lat_principal, lat_colab],
+                mode='lines',
+                line=dict(width=line_width, color='rgba(8, 81, 156, 0.6)'),  # azul consistente
+                hoverinfo='text',
+                text=f"{country_names.get(pais_principal_code, pais_principal_code)} → {country_names.get(country_code, country_code)}: {count} colaboraciones",
+                showlegend=False
             ))
 
-    # Dibujar puntos
-    lats = [coords[0] for coords in country_coords.values()]
-    lons = [coords[1] for coords in country_coords.values()]
-    codes = list(country_coords.keys())
-    sizes = [18 if c == pais_principal else 10 for c in codes]
-    colors = ["blue" if c == pais_principal else "rgb(0,51,102)" for c in codes]
-
+    # --- Nodo central (estrella azul oscuro) ---
     fig.add_trace(go.Scattergeo(
-        lon=lons, lat=lats, mode="markers",
-        marker=dict(size=sizes, color=colors, line=dict(width=1, color="white")),
-        hoverinfo="text", text=codes
+        lon=[lon_principal],
+        lat=[lat_principal],
+        mode='markers+text',
+        marker=dict(
+            size=18,
+            color='darkblue',
+            line=dict(width=2, color='white'),
+            symbol='star'
+        ),
+        text=[pais_principal_code],
+        textposition="top center",
+        textfont=dict(size=14, color="black", family="Arial Black"),
+        hoverinfo='text',
+        hovertext=f"{country_names.get(pais_principal_code, pais_principal_code)} (Autor Principal)",
+        showlegend=False
     ))
 
-    # Configuración final del mapa
+    # --- Países colaboradores (círculos celestes) ---
+    for country_code, count in top_collaborators:
+        if country_code in country_coords and country_code != pais_principal_code:
+            lat_colab, lon_colab = country_coords[country_code]
+            fig.add_trace(go.Scattergeo(
+                lon=[lon_colab],
+                lat=[lat_colab],
+                mode='markers+text',
+                marker=dict(
+                    size=10 + (count / max_collab) * 5,
+                    color='skyblue',
+                    line=dict(width=1, color='gray'),
+                    symbol='circle'
+                ),
+                text=[country_code],
+                textposition="top center",
+                textfont=dict(size=13, color="black"),
+                hoverinfo='text',
+                hovertext=f"{country_names.get(country_code, country_code)}: {count} colaboraciones",
+                showlegend=False
+            ))
+
+    # --- Configuración visual ---
     fig.update_layout(
         showlegend=False,
         geo=dict(
             showland=True,
-            landcolor="rgb(243,243,243)",
-            countrycolor="rgb(204,204,204)",
-            projection_type="natural earth"
+            landcolor='rgb(240, 240, 240)',
+            countrycolor='rgb(200, 200, 200)',
+            showcountries=True,
+            projection_type='miller',
+            bgcolor='rgba(255,255,255,1)',
+            showocean=True,
+            oceancolor='rgb(230, 245, 255)',
+            lataxis_showgrid=False,
+            lonaxis_showgrid=False,
+            fitbounds="locations",
         ),
-        margin=dict(r=0, t=0, l=0, b=0),
-        height=420
+        height=350,
+        margin=dict(l=2, r=2, t=2, b=2),
+        autosize=True,
+        font=dict(size=15),
+        paper_bgcolor='white',
+        plot_bgcolor='white'
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
+    # --- Exportar PDF ---
+    safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
+    pdf_filename = f"mapa_colaboracion_{safe_author_name}.pdf"
+
 # ============================================================
-# 📈 Modelos de Crecimiento de Citas (Power Law, Logistic, Gompertz)
+# 7️⃣ Modelo de Crecimiento de citas
 # ============================================================
 def graficar_modelos_crecimiento_citas(df_master, author_display_name):
-    """
-    Grafica los modelos de crecimiento de citas (Power Law, Logístico y Gompertz)
-    para el autor que se está analizando. 
-
-    La función calcula las citas acumuladas por año y ajusta distintos modelos
-    de crecimiento para evaluar cuál describe mejor la evolución de las citas 
-    del autor a lo largo del tiempo. 
-
-    El gráfico muestra los datos reales junto con las curvas ajustadas y 
-    sus respectivos valores de R², con la leyenda posicionada en la parte inferior.
-    """
-
+    # --- VALIDACIÓN INICIAL ---
     if df_master is None or df_master.empty:
-        st.warning("⚠️ No hay datos disponibles para generar la gráfica de crecimiento de citas.")
+        st.warning("⚠️ No hay datos disponibles para generar la gráfica.")
         return
 
-    # Normalizar nombres de columnas
-    if "year" not in df_master.columns:
-        if "publication_year" in df_master.columns:
-            df_master["year"] = df_master["publication_year"]
+    # --- CONFIGURACIÓN GLOBAL DE ESTILO ---
+    a = 18  # Tamaño base de fuente
+    b = 2.0  # Grosor de líneas principales
+
+    sns.set_theme(style="whitegrid", rc={
+        'font.size': a,
+        'axes.titlesize': a,
+        'axes.labelsize': a,
+        'xtick.labelsize': a,
+        'ytick.labelsize': a,
+        'legend.fontsize': a - 2,
+        'legend.title_fontsize': a - 1
+    })
+
+    plt.rcParams.update({
+        'font.family': 'sans-serif',
+        'font.size': a,
+        'axes.titlesize': a,
+        'axes.labelsize': a,
+        'xtick.labelsize': a - 1,
+        'ytick.labelsize': a - 1,
+        'legend.fontsize': a - 2,
+        'legend.title_fontsize': a - 1
+    })
+
+    # ============================================================
+    # 1️⃣ PREPARACIÓN DE DATOS
+    # ============================================================
+
+    def safe_split(x):
+        if isinstance(x, str) and "|" in x:
+            return x.split("|")
+        elif isinstance(x, str):
+            return [x]
+        elif isinstance(x, list):
+            return x
         else:
-            st.warning("⚠️ No se encontró ninguna columna de año ('year' o 'publication_year').")
-            return
+            return []
 
-    if "cited_by_count" not in df_master.columns:
-        st.warning("⚠️ No se encontró la columna 'cited_by_count'.")
+    def to_int_list(lst):
+        out = []
+        for val in lst:
+            try:
+                out.append(int(val))
+            except:
+                out.append(0)
+        return out
+
+    # --- PREPARAR COLUMNAS ---
+    df_master["year_list"] = df_master["counts_by_year.year"].apply(safe_split).apply(to_int_list)
+    df_master["cited_list"] = df_master["counts_by_year.cited_by_count"].apply(safe_split).apply(to_int_list)
+
+    # --- DESANIDAR DATOS ---
+    expanded_rows = []
+    for _, row in df_master.iterrows():
+        years = row["year_list"]
+        cites = row["cited_list"]
+        if len(years) == len(cites) and len(years) > 0:
+            for y, c in zip(years, cites):
+                expanded_rows.append({"year": y, "cited_by_count": c})
+
+    if not expanded_rows:
+        st.warning("⚠️ No se pudieron expandir los datos. Revisa las columnas 'counts_by_year.*'.")
         return
 
-    # --- 1️⃣ Preparar datos ---
-    citations_df = (
-        df_master.groupby("year", as_index=False)["cited_by_count"].sum().sort_values("year")
+    citations_df = pd.DataFrame(expanded_rows)
+    citations_summary = (
+        citations_df.groupby("year", as_index=False)
+        .agg({"cited_by_count": "sum"})
+        .sort_values("year", ascending=True)
     )
-    citations_df["t"] = citations_df["year"] - citations_df["year"].min()
-    citations_df["cumulative_citations"] = citations_df["cited_by_count"].cumsum()
 
-    t_data = citations_df["t"].values
-    L_data = citations_df["cumulative_citations"].values
+    # ============================================================
+    # 2️⃣ AJUSTE DE MODELOS SOBRE EL ACUMULADO DE CITAS
+    # ============================================================
 
-    # --- 2️⃣ Modelos ---
-    def power_law_model(t, A, m): return A * (t**m)
+    first_year = citations_summary["year"].min()
+    citations_summary["t"] = citations_summary["year"] - first_year
+    cumulative_citations = citations_summary["cited_by_count"].cumsum()
+
+    t_data = citations_summary["t"].values
+    L_data = cumulative_citations.values
+
+    # --- Modelos matemáticos ---
+    def power_law_model(t, A, m): return A * (t ** m)
     def logistic_model(t, K, a, t0): return K / (1 + np.exp(-a * (t - t0)))
     def gompertz_model(t, K, b, c): return K * np.exp(-b * np.exp(-c * t))
 
-    # --- 3️⃣ Ajuste ---
     results = {}
+
+    # Parámetros iniciales
     p0_logistic = [max(L_data), 1, np.median(t_data)]
     p0_gompertz = [max(L_data), 1, 0.5]
 
     try:
         params_power, _ = curve_fit(power_law_model, t_data, L_data)
-        y_pred_power = power_law_model(t_data, *params_power)
-        results["Power Law"] = {"params": params_power, "R2": r2_score(L_data, y_pred_power)}
-    except:
+        y_pred = power_law_model(t_data, *params_power)
+        results['Ley de Potencia'] = {'R2': r2_score(L_data, y_pred), 'params': params_power, 'pred': y_pred}
+    except RuntimeError:
         pass
 
     try:
-        params_logistic, _ = curve_fit(logistic_model, t_data, L_data, p0=p0_logistic, maxfev=5000)
-        y_pred_logistic = logistic_model(t_data, *params_logistic)
-        results["Logistic"] = {"params": params_logistic, "R2": r2_score(L_data, y_pred_logistic)}
-    except:
+        params_log, _ = curve_fit(logistic_model, t_data, L_data, p0=p0_logistic, maxfev=5000)
+        y_pred = logistic_model(t_data, *params_log)
+        results['Logístico'] = {'R2': r2_score(L_data, y_pred), 'params': params_log, 'pred': y_pred}
+    except RuntimeError:
         pass
 
     try:
-        params_gompertz, _ = curve_fit(gompertz_model, t_data, L_data, p0=p0_gompertz, maxfev=5000)
-        y_pred_gompertz = gompertz_model(t_data, *params_gompertz)
-        results["Gompertz"] = {"params": params_gompertz, "R2": r2_score(L_data, y_pred_gompertz)}
-    except:
+        params_gomp, _ = curve_fit(gompertz_model, t_data, L_data, p0=p0_gompertz, maxfev=5000)
+        y_pred = gompertz_model(t_data, *params_gomp)
+        results['Gompertz'] = {'R2': r2_score(L_data, y_pred), 'params': params_gomp, 'pred': y_pred}
+    except RuntimeError:
         pass
 
     if not results:
-        st.warning("⚠️ No se pudieron ajustar los modelos de crecimiento.")
+        st.error("❌ No se pudieron ajustar los modelos.")
         return
 
-    # --- 4️⃣ Gráfica Plotly ---
-    t_smooth = np.linspace(min(t_data), max(t_data), 200)
-    year_smooth = t_smooth + citations_df["year"].min()
+    # ============================================================
+    # 3️⃣ GRÁFICO FINAL (STREAMLIT)
+    # ============================================================
 
-    fig = go.Figure()
+    t_smooth = np.linspace(min(t_data), max(t_data), 300)
+    year_smooth = t_smooth + first_year
 
-    # Datos reales
-    fig.add_trace(go.Scatter(
-        x=citations_df["year"],
-        y=L_data,
-        mode="markers+lines",
-        name="Datos reales (acumulados)",
-        line=dict(color="black", width=2)
-    ))
+    colors = {
+        'Ley de Potencia': '#08306b',
+        'Logístico': '#2171b5',
+        'Gompertz': '#6baed6'
+    }
 
-    # Modelos ajustados
-    colors = {"Power Law": "blue", "Logistic": "green", "Gompertz": "red"}
+    linestyles = {
+        'Ley de Potencia': '--',
+        'Logístico': ':',
+        'Gompertz': '-.'
+    }
 
-    for model_name, info in results.items():
-        params = info["params"]
-        r2 = info["R2"]
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 10),
+                                   sharex=True,
+                                   gridspec_kw={'height_ratios': [3, 1], 'hspace': 0.05})
 
-        if model_name == "Power Law":
-            y_fit = power_law_model(t_smooth, *params)
-        elif model_name == "Logistic":
-            y_fit = logistic_model(t_smooth, *params)
+    # --- PANEL SUPERIOR ---
+    ax1.scatter(citations_summary["year"], L_data,
+                label="Observaciones reales",
+                color="black", zorder=5, s=50, alpha=0.8)
+
+    for model, res in results.items():
+        if model == 'Ley de Potencia':
+            y_smooth = power_law_model(t_smooth, *res["params"])
+        elif model == 'Logístico':
+            y_smooth = logistic_model(t_smooth, *res["params"])
         else:
-            y_fit = gompertz_model(t_smooth, *params)
+            y_smooth = gompertz_model(t_smooth, *res["params"])
 
-        fig.add_trace(go.Scatter(
-            x=year_smooth,
-            y=y_fit,
-            mode="lines",
-            name=f"{model_name} (R²={r2:.3f})",
-            line=dict(color=colors[model_name], dash="dash")
-        ))
+        ax1.plot(year_smooth, y_smooth,
+                 linestyles[model],
+                 linewidth=b,
+                 color=colors[model],
+                 label=f"{model} (R²={res['R2']:.3f})")
 
-    fig.update_layout(
-        xaxis_title="Año",
-        yaxis_title="Citas acumuladas",
-        template="plotly_white",
-        height=500,
-        showlegend=True,
-        legend=dict(
-            orientation="h",   # horizontal
-            yanchor="top",
-            y=-0.25,           # mueve la leyenda debajo de la gráfica
-            xanchor="center",
-            x=0.5,
-            font=dict(size=12)
-        ),
-        margin=dict(l=20, r=20, t=20, b=60)
-    )
+    ax1.set_ylabel("Citas acumuladas", fontsize=a)
+    ax1.legend(loc="best", frameon=False)
+    ax1.grid(False)
 
-    st.plotly_chart(fig, use_container_width=True)
+    # --- PANEL INFERIOR (Error relativo) ---
+    for model, res in results.items():
+        rel_err = (res["pred"] / L_data) - 1
+        ax2.plot(citations_summary["year"], rel_err,
+                 linestyle=linestyles[model],
+                 color=colors[model],
+                 linewidth=b)
+
+    ax2.axhline(0.0, color="black", linewidth=0.8)
+    ax2.set_yticks(np.arange(-0.2, 0.21, 0.1))
+    ax2.set_ylim(-0.2, 0.2)
+    ax2.set_ylabel(r"$\frac{y_{modelo}}{y_{real}} - 1$", fontsize=a - 2)
+    ax2.set_xlabel("Año", fontsize=a)
+    ax2.grid(False)
+
+    plt.tight_layout()
+
+    # --- MOSTRAR EN STREAMLIT ---
+    st.pyplot(fig)
+
+    # --- DESCARGA PDF ---
+    safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
+    pdf_filename = f"{safe_author_name}_modelos_citas_acumuladas.pdf"
+    fig.savefig(pdf_filename, bbox_inches="tight", dpi=300)
 
 # ============================================================
 # ☁️ NUBE DE PALABRAS DE TÍTULOS
@@ -630,7 +1081,8 @@ def graficar_nube_titulos(df_master):
         height=500, 
         background_color="white",
         max_words=200, 
-        collocations=False
+        collocations=False,
+        colormap="Blues"
     ).generate(all_text)
 
     # Mostrar con Streamlit
@@ -638,8 +1090,6 @@ def graficar_nube_titulos(df_master):
     ax.imshow(wordcloud, interpolation="bilinear")
     ax.axis("off")
     st.pyplot(fig)
-
-
 
 # ============================================================
 # ☁️ NUBE DE PALABRAS DE ABSTRACTS
@@ -676,7 +1126,8 @@ def graficar_nube_abstracts(df_master):
         height=500, 
         background_color="white",
         max_words=200, 
-        collocations=False
+        collocations=False,
+        colormap="Blues"
     ).generate(all_text)
 
     # Mostrar con Streamlit
