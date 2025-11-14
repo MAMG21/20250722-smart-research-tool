@@ -2,6 +2,9 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import hydralit_components as hc
+import glob
+import pandas as pd
+import os
 
 # Analiticias
 import core.graficas_autor as graficas
@@ -410,37 +413,70 @@ def allapp_page():
     # Gráfica 1
     with col1:
         st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Nube de Palabras de acuerdo a los Titulos</div>", unsafe_allow_html=True)
-        graficas.graficar_nube_titulos(df_master)
+        graficas.graficar_nube_titulos(df_master, st.session_state.get('author_name', 'Autor desconocido'))
 
     # Gráfica 2
     with col2:
         st.markdown("<div style='text-align: center; color: black; font-size: 15px;'>Nube de Palabras de acuerdo a los Abstracts</div>", unsafe_allow_html=True)
-        graficas.graficar_nube_abstracts(df_master)
+        graficas.graficar_nube_abstracts(df_master, st.session_state.get('author_name', 'Autor desconocido'))
 
-    st.markdown(
-        "<div style='text-align: left; color: gray; font-size: 20px;'>Análisis de Texto</div>",
-        unsafe_allow_html=True
-    )
-    st.markdown("<div style='margin: 25px 0;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin: 40px 0;'></div>", unsafe_allow_html=True)
+
+    # ----------------------------
+    # Proceso de Exportar reporte 
+    # ----------------------------
+    st.subheader("📥 Exportar reporte")
+
+    OUTPUT_DIR = "outputs"
+
+    def cargar_figuras_analisis(author_name):
+        """
+        Busca automáticamente todas las imágenes generadas en OUTPUT_DIR
+        usando el nombre del autor como filtro.
+        Devuelve la lista en el formato requerido por exportar_pdf().
+        """
+
+        safe_author = author_name.replace(" ", "_").replace(".", "").lower()
+
+        # Lista final (titulo, ruta)
+        figuras = []
+
+        # Mapear prefijos a títulos bonitos
+        TITULOS_MAP = {
+            "graficar_citas_por_anio": "Citas por Año",
+            "graficar_mapa": "Mapa de Colaboraciones",
+            "graficar_modelo": "Modelos de Crecimiento de Citas",
+            "graficar_nube_abstract": "Nube de Palabras — Abstracts",
+            "graficar_nube_titulos": "Nube de Palabras — Títulos",
+            "graficar_publicaciones_por_anio": "Publicaciones por Año",
+            "graficar_red_coautoria": "Red de Coautoría",
+            "graficar_red_instituciones": "Red de Instituciones",
+            "graficar_posicion_autoria": "Posición de Autoría",
+        }
+
+        # Recorrer archivos del directorio
+        for filename in os.listdir(OUTPUT_DIR):
+            if safe_author in filename and filename.endswith(".png"):
+
+                ruta = os.path.join(OUTPUT_DIR, filename)
+
+                # Detectar el tipo por el prefijo
+                for prefijo, titulo in TITULOS_MAP.items():
+                    if filename.startswith(prefijo):
+                        figuras.append((titulo, ruta))
+                        break
+
+        return figuras
 
 
-    st.info("📄 Para exportar esta visualización, presiona `Ctrl + P` / `Cmd + P` y elige 'Guardar como PDF'.")
+    author_name = st.session_state.get("author_name", "Autor desconocido")
+    total_public = st.session_state.get("total_public", "0")
+    df_metricas = st.session_state.df_metricas    # ahora viene como dict
+    figuras = cargar_figuras_analisis(author_name)
 
-    #st.markdown("<div style='margin: 40px 0;'></div>", unsafe_allow_html=True)
-    #st.subheader("📥 Exportar reporte")
+    # Convertir dict → DataFrame
+    df_final = pd.DataFrame([df_metricas])
 
-    ## Capturar las figuras si tus funciones las devuelven
-    #figuras = []
-
-    #author_name = st.session_state.get("author_name", "Autor desconocido")
-    #total_public = st.session_state.get("total_public", "0")
-
-    #df_metricas = st.session_state.df_metricas
-    #df_final = df_metricas.to_frame().T
-
-    #exportar_pdf(df_final, author_name, total_public, figuras)
-
-
-
+    exportar_pdf(df_final, author_name, total_public, figuras)
 
         

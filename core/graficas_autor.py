@@ -22,6 +22,8 @@ import base64
 from io import BytesIO
 import seaborn as sns
 
+# Ruta para guardar imagen de la grafica
+OUTPUT_DIR = "outputs"
 # ============================================================
 # 1️⃣ Publicaciones por año
 # ============================================================
@@ -89,8 +91,8 @@ def graficar_publicaciones_por_anio(df_master, author_display_name):
 
     # --- Guardar PDF opcional ---
     safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
-    filename_hist = f'histograma_articulos_{safe_author_name}.pdf'
-    fig.write_image(filename_hist)
+    file_publicaciones = f"{OUTPUT_DIR}/graficar_publicaciones_por_anio_{safe_author_name}.png"
+    fig.write_image(file_publicaciones)
 
 # ============================================================
 # 2️⃣ Citas por año
@@ -183,8 +185,8 @@ def graficar_citas_por_anio(df_master, author_display_name):
 
     # --- Guardar PDF opcional ---
     safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
-    filename_citas = f'citas_por_ano_{safe_author_name}.pdf'
-    fig.write_image(filename_citas)
+    file_citas_ano = f"{OUTPUT_DIR}/graficar_citas_por_anio_{safe_author_name}.png"
+    fig.write_image(file_citas_ano)
 
 # ============================================================
 # 3️⃣ Posición de autoría (solo barras)
@@ -267,8 +269,8 @@ def graficar_posicion_autoria(df_master, author_display_name):
 
     # --- Guardar PDF ---
     safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
-    filename_posicion = f'posicion_autoria_{safe_author_name}.pdf'
-    fig.write_image(filename_posicion)
+    file_autoria = f"{OUTPUT_DIR}/graficar_posicion_autoria_{safe_author_name}.png"
+    fig.write_image(file_autoria)
 
 # ============================================================
 # 4️⃣ Red de coautoría (mantiene nodos)
@@ -404,9 +406,9 @@ def graficar_red_coautoria(df_master, author_display_name):
     st.plotly_chart(fig, use_container_width=True)
 
     # --- Guardar PDF ---
-    safe_author_name = autor_principal.replace(" ", "_").replace(".", "").lower()
-    pdf_filename = f"red_coautoria_{safe_author_name}.pdf"
-    fig.write_image(pdf_filename)
+    safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
+    file_co_autoria = f"{OUTPUT_DIR}/graficar_red_coautoria_{safe_author_name}.png"
+    fig.write_image(file_co_autoria)
 
 # ============================================================
 # 5️⃣ Red de colaboración entre instituciones (mantiene nodos)
@@ -560,9 +562,9 @@ def graficar_red_instituciones(df_master, author_display_name):
     st.plotly_chart(fig, use_container_width=True)
 
     # --- Guardar PDF ---
-    safe_author_name = autor_objetivo.replace(" ", "_").replace(".", "").lower()
-    pdf_filename = f"red_instituciones_{safe_author_name}.pdf"
-    fig.write_image(pdf_filename)
+    safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
+    file_instituciones = f"{OUTPUT_DIR}/graficar_red_instituciones_{safe_author_name}.png"
+    fig.write_image(file_instituciones)
 
 # ============================================================
 # 6️⃣ Mapa de colaboraciones internacionales
@@ -845,7 +847,8 @@ def graficar_mapa_colaboraciones_internacionales(df_master, author_display_name)
 
     # --- Exportar PDF ---
     safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
-    pdf_filename = f"mapa_colaboracion_{safe_author_name}.pdf"
+    file_mapa = f"{OUTPUT_DIR}/graficar_mapa_{safe_author_name}.png"
+    fig.write_image(file_mapa)
 
 # ============================================================
 # 7️⃣ Modelo de Crecimiento de citas
@@ -1043,13 +1046,13 @@ def graficar_modelos_crecimiento_citas(df_master, author_display_name):
 
     # --- DESCARGA PDF ---
     safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
-    pdf_filename = f"{safe_author_name}_modelos_citas_acumuladas.pdf"
-    fig.savefig(pdf_filename, bbox_inches="tight", dpi=300)
+    file_modelo = f"{OUTPUT_DIR}/graficar_modelo_{safe_author_name}.png"
+    fig.savefig(file_modelo, dpi=300, bbox_inches="tight")
 
 # ============================================================
 # ☁️ NUBE DE PALABRAS DE TÍTULOS
 # ============================================================
-def graficar_nube_titulos(df_master):
+def graficar_nube_titulos(df_master, author_display_name):
     """
     Genera y muestra una nube de palabras basada en los títulos de las publicaciones 
     del autor analizado. Si no hay suficientes datos, muestra una advertencia.
@@ -1091,10 +1094,15 @@ def graficar_nube_titulos(df_master):
     ax.axis("off")
     st.pyplot(fig)
 
+    # Guardar figura
+    safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
+    file_nube_titulos= f"{OUTPUT_DIR}/graficar_nube_titulos_{safe_author_name}.png"
+    fig.savefig(file_nube_titulos, dpi=300, bbox_inches='tight')
+
 # ============================================================
 # ☁️ NUBE DE PALABRAS DE ABSTRACTS
 # ============================================================
-def graficar_nube_abstracts(df_master):
+def graficar_nube_abstracts(df_master, author_display_name):
     """
     Genera y muestra una nube de palabras basada en los abstracts de las publicaciones 
     del autor analizado. Si no hay suficientes datos, muestra una advertencia.
@@ -1135,3 +1143,9 @@ def graficar_nube_abstracts(df_master):
     ax.imshow(wordcloud, interpolation="bilinear")
     ax.axis("off")
     st.pyplot(fig)
+
+    # Guardar imagen
+    safe_author_name = author_display_name.replace(' ', '_').replace('.', '').lower()
+    file_nube_abstract= f"{OUTPUT_DIR}/graficar_nube_abstract_{safe_author_name}.png"
+    fig.savefig(file_nube_abstract, dpi=300, bbox_inches='tight')
+    
