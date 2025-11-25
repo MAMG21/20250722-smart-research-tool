@@ -26,14 +26,14 @@ import datetime
 def home_page():
     st.divider()
     st.markdown(
-        "<h3 style='text-align: center; color: black;'>📊 Evaluación del Impacto Científico de Investigadores en Física y Astronomía</h1>",
+        "<h3 style='text-align: center; color: black;'>📊 Evaluación del Impacto Científico de Investigadores</h1>",
         unsafe_allow_html=True)
     st.markdown('')
     st.markdown('**Introducción**')
     st.markdown(
         """
         <div style="text-align: justify;">
-            <b>Esta herramienta está diseñada para facilitar el análisis, evaluación y visualización del impacto científico de investigadores en las áreas de física y astronomía.</b> 
+            <b>Esta herramienta está diseñada para facilitar el análisis, evaluación y visualización del impacto científico de investigadores en las áreas diferentes áreas del conocimiento.</b> 
             Combina métricas bibliométricas tradicionales (como el índice h) con altmétricas y técnicas de aprendizaje automático, utilizando datos abiertos provenientes de OpenAlex.
         </div>
         """,
