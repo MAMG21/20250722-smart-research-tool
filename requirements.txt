@@ -71,4 +71,3 @@ wordcloud==1.9.4
 zope.interface==8.0.1
 reportlab
 kaleido
-plotly_get_chrome
