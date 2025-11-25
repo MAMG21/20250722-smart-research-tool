@@ -18,7 +18,7 @@ streamlit
 # Backend/API
 fastapi
 uvicorn
-json
+#json
 
 # Otros
 tqdm
