@@ -105,7 +105,7 @@ chosen_tab = hc.option_bar(
     override_theme=over_theme,
     horizontal_orientation=True)
 
-st.success("Bienvenido a la herramienta de análisis del impacto científico de investigadores en física y astronomía. Aquí podrás explorar métricas bibliométricas y altmétricas integradas, visualizar resultados de forma interactiva y conocer el nivel de relevancia de los investigadores.")
+st.success("Bienvenido a la herramienta de análisis del impacto científico de investigadores. Aquí podrás explorar métricas bibliométricas y altmétricas integradas, visualizar resultados de forma interactiva y conocer el nivel de relevancia de los investigadores.")
 
 if chosen_tab == HOME:
     home_page()
